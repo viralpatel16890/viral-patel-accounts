@@ -84,10 +84,8 @@ export const clearGoogleSheetsConfig = (): void => {
   }
 };
 
-export const syncGoogleSheetTransactions = async (): Promise<{ transactions: Transaction[] }> => {
+export const syncGoogleSheetTransactions = async (): Promise<{ transactions: Transaction[]; sheetName?: string; lastSynced?: string }> => {
   try {
-    // This would typically make an API call to the server
-    // For now, we'll simulate the sync process
     const response = await fetch('/api/google-sheets/sync', {
       method: 'POST',
       headers: {
@@ -101,15 +99,29 @@ export const syncGoogleSheetTransactions = async (): Promise<{ transactions: Tra
     
     const data = await response.json();
     
+    if (!data.success) {
+      throw new Error(data.error || 'Sync failed');
+    }
+    
     // Cache the response
     setCachedGoogleSheetData({
       transactions: data.transactions,
-      lastSynced: new Date().toISOString(),
+      lastSynced: data.lastSynced,
     });
     
-    return data;
+    return {
+      transactions: data.transactions,
+      sheetName: data.sheetName,
+      lastSynced: data.lastSynced
+    };
   } catch (error) {
     console.error('Error syncing Google Sheets data:', error);
     throw error;
   }
+};
+
+// Force refresh data by clearing cache and syncing
+export const forceRefreshGoogleSheetData = async (): Promise<{ transactions: Transaction[]; sheetName?: string; lastSynced?: string }> => {
+  clearCachedGoogleSheetData();
+  return await syncGoogleSheetTransactions();
 };

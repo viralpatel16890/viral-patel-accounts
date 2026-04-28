@@ -4,6 +4,7 @@ import {
   clearCachedGoogleSheetData,
   getCachedGoogleSheetData,
   syncGoogleSheetTransactions,
+  forceRefreshGoogleSheetData,
 } from '../services/googleSheets';
 
 export type UserDataSource = 'local-json' | 'google-sheets';
@@ -112,11 +113,22 @@ export const resetUserTransactionsToLocal = () => {
 };
 
 export const syncUserTransactionsFromGoogleSheet = async () => {
-  const payload = await syncGoogleSheetTransactions();
-  activeDataSource = 'google-sheets';
-  userTransactions = buildTransactions(payload.transactions as any[]);
-  refreshDerivedData();
-  return payload;
+  try {
+    // Force refresh to get the latest data from Google Sheets
+    const payload = await forceRefreshGoogleSheetData();
+    activeDataSource = 'google-sheets';
+    userTransactions = buildTransactions(payload.transactions as any[]);
+    refreshDerivedData();
+    return {
+      success: true,
+      sheetName: payload.sheetName,
+      lastSynced: payload.lastSynced,
+      transactionCount: payload.transactions.length
+    };
+  } catch (error) {
+    console.error('Failed to sync from Google Sheets:', error);
+    throw error;
+  }
 };
 
 // ─── Calculate Monthly Summary for 2016-2017 ────────────────────────────────────
