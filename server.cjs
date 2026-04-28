@@ -10,10 +10,10 @@ const PORT = 3001;
 app.use(cors());
 app.use(express.json());
 
-// Environment variables (you'll need to set these on the server)
+// Environment variables for Google Sheets authentication
 const SPREADSHEET_ID = process.env.GOOGLE_SHEETS_SPREADSHEET_ID || '1EhSkx5qFzjWdVTCi-QJuf_OZx7cF1S01';
-const CLIENT_EMAIL = process.env.GOOGLE_SHEETS_CLIENT_EMAIL || 'google-sheets-service@viral-patel-accounts.iam.gserviceaccount.com';
-const PRIVATE_KEY = process.env.GOOGLE_SHEETS_PRIVATE_KEY || '';
+const CLIENT_EMAIL = process.env.GOOGLE_SHEETS_CLIENT_EMAIL || process.env.VITE_GOOGLE_SHEETS_CLIENT_EMAIL || '';
+const PRIVATE_KEY = process.env.GOOGLE_SHEETS_PRIVATE_KEY || process.env.VITE_GOOGLE_SHEETS_PRIVATE_KEY || '';
 
 // Google Sheets Service
 class GoogleSheetsService {
@@ -26,19 +26,52 @@ class GoogleSheetsService {
     if (this.isInitialized) return;
 
     try {
-      // For now, use mock data with your updated entries
-      // In production, you would need to configure proper Google Sheets credentials
-      console.log('Using mock data with updated entries including testing entry 01 with 150,000');
-      this.isInitialized = true;
-      this.mockData = true;
+      // Try real Google Sheets authentication
+      console.log('Attempting Google Sheets authentication...');
       
-      // TODO: Configure real Google Sheets authentication by:
-      // 1. Setting up proper Google Cloud Service Account
-      // 2. Adding credentials to environment variables
-      // 3. Using correct google-spreadsheet library version
+      // Check if we have real credentials
+      if (CLIENT_EMAIL && PRIVATE_KEY && PRIVATE_KEY.includes('-----BEGIN')) {
+        console.log('Using real Google Sheets credentials');
+        
+        // Create JWT client for authentication
+        const serviceAccountAuth = new JWT({
+          email: CLIENT_EMAIL,
+          key: PRIVATE_KEY.replace(/\\n/g, '\n'),
+          scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+        });
+
+        // Try different authentication methods
+        try {
+          // Method 1: Direct object auth (newer versions)
+          await this.doc.useServiceAccountAuth({
+            client_email: CLIENT_EMAIL,
+            private_key: PRIVATE_KEY.replace(/\\n/g, '\n'),
+          });
+          console.log('Authentication successful with method 1');
+        } catch (authError) {
+          try {
+            // Method 2: JWT instance auth (older versions)
+            await this.doc.useServiceAccountAuth(serviceAccountAuth);
+            console.log('Authentication successful with method 2');
+          } catch (authError2) {
+            throw new Error(`Authentication failed: ${authError2.message}`);
+          }
+        }
+        
+        await this.doc.loadInfo();
+        this.isInitialized = true;
+        this.mockData = false;
+        console.log('✅ Google Sheets authentication successful - using REAL data');
+        
+      } else {
+        console.log('⚠️  No valid Google Sheets credentials found, using mock data');
+        console.log('To use real data, set GOOGLE_SHEETS_CLIENT_EMAIL and GOOGLE_SHEETS_PRIVATE_KEY');
+        this.isInitialized = true;
+        this.mockData = true;
+      }
       
     } catch (error) {
-      console.error('Authentication failed, using fallback data:', error.message);
+      console.error('❌ Authentication failed, using fallback data:', error.message);
       // Fallback to mock data if authentication fails
       this.isInitialized = true;
       this.mockData = true;
